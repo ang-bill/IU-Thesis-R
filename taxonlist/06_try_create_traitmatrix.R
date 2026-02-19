@@ -14,10 +14,9 @@ output_file_excel <- file.path(basepath, "output", "taxonlist", "traitmatrix.xls
 
 # 2. Import raw TRY data and the mapped dictionary
 try_raw <- rtry_import(try_file)
-mapped_dict <- read_csv(dict_file)
+mapped_dict <- read_csv(dict_file, show_col_types = FALSE)
 
-# 3. Join dictionary to raw data to classify rows
-# We use left_join. If it's a numeric trait, Clean_Category will be NA because it wasn't in the dict.
+# 3. Join dictionary to raw data
 try_joined <- try_raw %>%
   left_join(
     mapped_dict %>% select(TraitID, OrigValueStr, Clean_Category), 
@@ -28,55 +27,53 @@ try_joined <- try_raw %>%
 # TRACK A: CATEGORICAL TRAITS PROCESSING
 # ==========================================
 categorical_traits <- try_joined %>%
-  # Filter out rows where TRY database is missing the TraitName
-  filter(!is.na(TraitName) & TraitName != "") %>%
-  
-  # Keep only mapped categorical traits, drop "Exclude" and unmapped/numeric (NA)
   filter(!is.na(Clean_Category) & Clean_Category != "Exclude" & Clean_Category != "") %>%
   group_by(AccSpeciesID, AccSpeciesName, TraitName) %>%
   summarize(
+    # The standardized LLM category
     Category = paste(unique(na.omit(Clean_Category)), collapse = ", "),
+    # The raw distinct concatenated values
+    Details = paste(unique(na.omit(OrigValueStr)), collapse = ", "),
     .groups = "drop"
   ) %>%
   pivot_wider(
     names_from = TraitName,
-    values_from = Category,
-    names_glue = "{TraitName}_Category"
+    values_from = c(Category, Details),
+    names_glue = "{TraitName}_{.value}"
   )
 
 # ==========================================
 # TRACK B: NUMERIC TRAITS PROCESSING
 # ==========================================
 numeric_traits <- try_joined %>%
-  # Identify numeric traits: they weren't in the dictionary (Clean_Category is NA) 
-  # AND they have a standardized numeric value (StdValue)
+  # Filter out missing TraitNames (fixes the _Mean column artifact)
+  filter(!is.na(TraitName) & TraitName != "") %>%
   filter(is.na(Clean_Category) & !is.na(StdValue)) %>%
   group_by(AccSpeciesID, AccSpeciesName, TraitName) %>%
   summarize(
-    # Aggregate continuous traits mathematically
-    Mean_Value = mean(as.numeric(StdValue), na.rm = TRUE),
+    Mean = mean(as.numeric(StdValue), na.rm = TRUE),
+    # Calculate standard deviation to assess variance
+    StdDev = sd(as.numeric(StdValue), na.rm = TRUE),
     .groups = "drop"
   ) %>%
-  # Filter out any NAs that might have occurred during numeric conversion
-  filter(!is.na(Mean_Value)) %>%
+  filter(!is.na(Mean)) %>%
   pivot_wider(
     names_from = TraitName,
-    values_from = Mean_Value,
-    names_glue = "{TraitName}_Mean"
+    values_from = c(Mean, StdDev),
+    names_glue = "{TraitName}_{.value}"
   )
 
 # ==========================================
 # FINAL MERGE: Combine both tracks
 # ==========================================
-# Use a full join to ensure we keep species even if they lack one of the track types
 final_trait_matrix <- full_join(
   categorical_traits, 
   numeric_traits, 
   by = c("AccSpeciesID", "AccSpeciesName")
 )
 
-# Export the ready-to-model matrix for your Python pipeline
+# Export the enhanced matrix
 write_csv(final_trait_matrix, output_file_csv)
 write_xlsx(final_trait_matrix, output_file_excel)
 
-print("Bifurcated trait matrix successfully created!")
+print("Enhanced trait matrix for species selection successfully created!")
