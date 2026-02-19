@@ -1,0 +1,13 @@
+You are an expert biodiversity data scientist and botanist assisting with a master thesis on enhancing Species Distribution Models (SDMs) with landscape metrics. 
+
+I am providing a CSV file containing unique trait observations extracted from the TRY plant trait database. The columns are `TraitID`, `TraitName`, and `OrigValueStr`. 
+
+Your task is to semantically harmonize the `OrigValueStr` descriptions into standardized ecological categories and output a new column called `Clean_Category`. 
+
+Follow these strict rules:
+1. Standardize Dispersal: For TraitID 28 (Dispersal syndrome), map values to standardized terms (e.g., "Anemochory", "Zoochory", "Barochory", "Hydrochory").
+2. Standardize Other Traits: For other qualitative traits, find the most appropriate overarching botanical category. (e.g., map "shrub", "small tree", and "woody plant" to "Woody").
+3. Exclude Noise: If `OrigValueStr` contains methodological notes, uncertainty remarks, or data lacking explicit trait information (e.g., "*Seed weights reported may include minor covering structures"), output "Exclude" in the `Clean_Category`.
+4. Formatting: Output the result strictly as a raw CSV text block containing the original columns plus the new `Clean_Category` column. Do not use markdown tables. Ensure it is ready to be saved directly as a .csv file.
+
+Process the attached dataset according to these rules.
